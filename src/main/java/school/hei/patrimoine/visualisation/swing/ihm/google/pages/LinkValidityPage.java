@@ -1,0 +1,231 @@
+package school.hei.patrimoine.visualisation.swing.ihm.google.pages;
+
+import static java.awt.Font.BOLD;
+import static school.hei.patrimoine.visualisation.swing.ihm.google.modele.GoogleLinkList.*;
+import static school.hei.patrimoine.visualisation.swing.ihm.google.modele.MessageDialog.showError;
+
+import java.awt.*;
+import javax.swing.*;
+import lombok.extern.slf4j.Slf4j;
+import school.hei.patrimoine.google.DriveLinkIdParser;
+import school.hei.patrimoine.google.DriveLinkVerifier;
+import school.hei.patrimoine.google.api.DriveApi;
+import school.hei.patrimoine.visualisation.swing.ihm.google.component.app.Page;
+import school.hei.patrimoine.visualisation.swing.ihm.google.component.button.Button;
+import school.hei.patrimoine.visualisation.swing.ihm.google.component.button.NavigateButton;
+import school.hei.patrimoine.visualisation.swing.ihm.google.modele.*;
+import school.hei.patrimoine.visualisation.swing.ihm.google.modele.AsyncTask;
+import school.hei.patrimoine.visualisation.swing.ihm.google.modele.GoogleLinkListDownloader;
+
+@Slf4j
+public class LinkValidityPage extends Page {
+  public static final String PAGE_NAME = "link-validity";
+
+  private final DefaultListModel<NamedLink> doneNamedLinksModel;
+  private final DefaultListModel<NamedLink> plannedNamedLinksModel;
+  private final DefaultListModel<NamedLink> justificativeNamedLinksModel;
+
+  private final JList<NamedLink> plannedNamedLinksList;
+  private final JList<NamedLink> doneNamedLinksList;
+  private final JList<NamedLink> justificativeNamedLinksList;
+
+  public LinkValidityPage() {
+    super(LinkValidityPage.PAGE_NAME);
+
+    this.plannedNamedLinksModel = new DefaultListModel<>();
+    this.doneNamedLinksModel = new DefaultListModel<>();
+    this.justificativeNamedLinksModel = new DefaultListModel<>();
+
+    this.plannedNamedLinksList = new JList<>(plannedNamedLinksModel);
+    this.doneNamedLinksList = new JList<>(doneNamedLinksModel);
+    this.justificativeNamedLinksList = new JList<>(justificativeNamedLinksModel);
+
+    this.plannedNamedLinksList.setCellRenderer(new NameLinkRenderer());
+    this.doneNamedLinksList.setCellRenderer(new NameLinkRenderer());
+    this.justificativeNamedLinksList.setCellRenderer(new NameLinkRenderer());
+
+    setLayout(new BorderLayout());
+    setBorder(BorderFactory.createEmptyBorder(10, 50, 10, 50));
+
+    addTitle();
+    addNamedLinksLists();
+    addSubmitButton();
+
+    globalState().subscribe("named-links", this::test);
+  }
+
+  private void addTitle() {
+    var title = new JLabel("Soumettre vos liens Google");
+    title.setFont(new Font("Arial", BOLD, 24));
+    title.setHorizontalAlignment(SwingConstants.CENTER);
+    title.setBorder(BorderFactory.createEmptyBorder(30, 0, 20, 0));
+
+    add(title, BorderLayout.NORTH);
+  }
+
+  private void addNamedLinksLists() {
+    var panel = new JPanel();
+    panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+    panel.setBorder(BorderFactory.createEmptyBorder(0, 0, 20, 0));
+
+    var plannedLabel = new JLabel("Liens vers les journaux planifiés :");
+    plannedLabel.setFont(new Font("Arial", BOLD, 18));
+    plannedLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+    panel.add(plannedLabel);
+
+    var plannedScroll = new JScrollPane(plannedNamedLinksList);
+    plannedScroll.setPreferredSize(new Dimension(400, 150));
+    plannedScroll.setAlignmentX(Component.LEFT_ALIGNMENT);
+    panel.add(plannedScroll);
+
+    panel.add(Box.createVerticalStrut(20));
+
+    var doneLabel = new JLabel("Liens vers les journaux réalisés :");
+    doneLabel.setFont(new Font("Arial", BOLD, 18));
+    doneLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+    panel.add(doneLabel);
+
+    var doneScroll = new JScrollPane(doneNamedLinksList);
+    doneScroll.setPreferredSize(new Dimension(400, 150));
+    doneScroll.setAlignmentX(Component.LEFT_ALIGNMENT);
+    panel.add(doneScroll);
+
+    panel.add(Box.createVerticalStrut(20));
+
+    var justificativeLabel = new JLabel("Liens vers les pièces justificatives :");
+    justificativeLabel.setFont(new Font("Arial", BOLD, 18));
+    justificativeLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+    panel.add(justificativeLabel);
+
+    var justificativeScroll = new JScrollPane(justificativeNamedLinksList);
+    justificativeScroll.setPreferredSize(new Dimension(400, 150));
+    justificativeScroll.setAlignmentX(Component.LEFT_ALIGNMENT);
+    panel.add(justificativeScroll);
+
+    add(panel, BorderLayout.CENTER);
+  }
+
+  private void addSubmitButton() {
+    var buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 30, 20));
+    buttonPanel.add(returnButton());
+    buttonPanel.add(submitButton());
+
+    add(buttonPanel, BorderLayout.SOUTH);
+  }
+
+  private Button submitButton() {
+    var submitButton = new Button("Envoyer");
+    submitButton.setPreferredSize(new Dimension(200, 50));
+    submitButton.setFont(new Font("Arial", BOLD, 18));
+    submitButton.addActionListener(e -> downloadFilesInBackground());
+
+    return submitButton;
+  }
+
+  private Button returnButton() {
+    var returnButton = new NavigateButton("Retour", SubmitLinkPage.PAGE_NAME);
+    returnButton.setFont(new Font("Arial", BOLD, 18));
+    returnButton.setPreferredSize(new Dimension(200, 50));
+
+    return returnButton;
+  }
+
+  protected void test() {
+    GoogleLinkList<NamedLink> links = globalState().get("named-links");
+
+    doneNamedLinksModel.clear();
+    plannedNamedLinksModel.clear();
+    justificativeNamedLinksModel.clear();
+
+    links.done().forEach(doneNamedLinksModel::addElement);
+    links.planned().forEach(plannedNamedLinksModel::addElement);
+    links.justificative().forEach(justificativeNamedLinksModel::addElement);
+    super.update();
+  }
+
+  private GoogleLinkList<NamedID> parseNamedIds() {
+    DriveLinkIdParser idParser = new DriveLinkIdParser();
+    GoogleLinkList<NamedLink> namedLinks = globalState().get("named-links");
+
+    var plannedIds =
+        namedLinks.planned().stream()
+            .map(l -> new NamedID(l.name(), idParser.apply(l.link())))
+            .toList();
+
+    var doneIds =
+        namedLinks.done().stream()
+            .map(l -> new NamedID(l.name(), idParser.apply(l.link())))
+            .toList();
+
+    var justificativeIds =
+        namedLinks.justificative().stream()
+            .map(l -> new NamedID(l.name(), idParser.apply(l.link())))
+            .toList();
+
+    return new GoogleLinkList<>(plannedIds, doneIds, justificativeIds);
+  }
+
+  private void downloadFilesInBackground() {
+    AsyncTask.<Void>builder()
+        .task(
+            () -> {
+              var namedIds = parseNamedIds();
+              DriveApi driveApi = globalState().get("drive-api");
+              var downloader = new GoogleLinkListDownloader(driveApi);
+              downloader.download(namedIds);
+
+              GoogleLinkList<NamedLink> namedLinks = globalState().get("named-links");
+              var saver = new GoogleLinkListCacheManager();
+              saver.save(namedLinks);
+
+              globalState().update("named-ids", namedIds);
+              return null;
+            })
+        .onSuccess(result -> pageManager().navigate(PatriLangFilesPage.PAGE_NAME))
+        .onError(e -> showError("Erreur", "Veuillez vérifier le contenu de vos documents"))
+        .build()
+        .execute();
+  }
+
+  private static class NameLinkRenderer extends JPanel implements ListCellRenderer<NamedLink> {
+    private final JLabel nameLabel;
+    private final JLabel valueLabel;
+    private final DriveLinkVerifier driveLinkVerifier;
+
+    public NameLinkRenderer() {
+      this.driveLinkVerifier = new DriveLinkVerifier();
+
+      setLayout(new BorderLayout(10, 5));
+      setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+      this.nameLabel = new JLabel();
+      this.nameLabel.setFont(new Font("Arial", BOLD, 16));
+
+      this.valueLabel = new JLabel();
+      this.valueLabel.setFont(new Font("Arial", Font.PLAIN, 16));
+
+      add(nameLabel, BorderLayout.WEST);
+      add(valueLabel, BorderLayout.CENTER);
+    }
+
+    @Override
+    public Component getListCellRendererComponent(
+        JList<? extends NamedLink> list,
+        NamedLink value,
+        int index,
+        boolean isSelected,
+        boolean cellHasFocus) {
+
+      nameLabel.setText(value.name());
+      valueLabel.setText(value.link());
+
+      if (driveLinkVerifier.verify(value.link())) {
+        setBackground(new Color(120, 220, 140));
+      } else {
+        setBackground(new Color(235, 100, 110));
+      }
+
+      return this;
+    }
+  }
+}

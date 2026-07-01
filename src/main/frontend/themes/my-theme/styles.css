@@ -1,0 +1,58 @@
+.home-view {
+    margin: 0;
+    padding: 0;
+}
+
+.separator {
+    display: block;
+    width: 85%;
+    margin: 0 auto;
+    height: 1px;
+    background-color: #7e8999;
+}
+
+.graphe-wrapper {
+    height: 720px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    background-color: #e7ebee;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.graphe {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.flux-tag {
+    background-color: #e4f0fe;
+    border-radius: 20px;
+    padding: 0 10px;
+    vertical-align: middle;
+    text-align: center;
+}
+
+.neg-flux-tag {
+    background-color: #fbe6e5;
+    border-radius: 20px;
+    padding: 0 10px;
+    vertical-align: middle;
+    text-align: center;
+}
+
+.more-flux-tag {
+    background-color: #e4f0fe;
+    border-radius: 20px;
+    padding: 0 5px;
+    vertical-align: middle;
+    text-align: center;
+}
+
+.graphe-grid-container {
+    display: flex;
+    flex-wrap: wrap;
+    flex-direction: row;
+}

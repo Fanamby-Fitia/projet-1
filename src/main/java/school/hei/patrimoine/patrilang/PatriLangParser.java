@@ -1,0 +1,65 @@
+package school.hei.patrimoine.patrilang;
+
+import static java.util.Objects.isNull;
+import static org.antlr.v4.runtime.CharStreams.fromFileName;
+import static school.hei.patrimoine.patrilang.antlr.PatriLangParser.CasContext;
+import static school.hei.patrimoine.patrilang.antlr.PatriLangParser.DocumentContext;
+import static school.hei.patrimoine.patrilang.antlr.PatriLangParser.ToutCasContext;
+
+import java.io.IOException;
+import org.antlr.v4.runtime.CommonTokenStream;
+import school.hei.patrimoine.patrilang.antlr.PatriLangLexer;
+import school.hei.patrimoine.patrilang.antlr.PatriLangParser.PiecesJustificativesContext;
+import school.hei.patrimoine.patrilang.files.PatriLangFile;
+import school.hei.patrimoine.patrilang.listener.PatrilangErrorListener;
+
+public class PatriLangParser {
+  public static ToutCasContext parseToutCas(PatriLangFile casSetFile) {
+    var document = parse(casSetFile);
+
+    if (isNull(document.toutCas())) {
+      throw new IllegalArgumentException("Fichier CasSet attendu, mais fichier Cas trouvé.");
+    }
+
+    return document.toutCas();
+  }
+
+  public static CasContext parseCas(PatriLangFile casFile) {
+    var document = parse(casFile);
+
+    if (isNull(document.cas())) {
+      throw new IllegalArgumentException("Fichier Cas attendu, mais fichier CasSet trouvé.");
+    }
+
+    return document.cas();
+  }
+
+  public static PiecesJustificativesContext parsePieceJustificative(PatriLangFile pjFile) {
+    var document = parse(pjFile);
+
+    if (isNull(document.piecesJustificatives())) {
+      throw new IllegalArgumentException(
+          "Fichier PieceJustificative attendu, mais un autre type de fichier trouvé.");
+    }
+
+    return document.piecesJustificatives();
+  }
+
+  public static DocumentContext parse(PatriLangFile file) {
+    try {
+      var lexer = new PatriLangLexer(fromFileName(file.getAbsolutePath()));
+      var tokens = new CommonTokenStream(lexer);
+      var parser = new school.hei.patrimoine.patrilang.antlr.PatriLangParser(tokens);
+      var errorListener = new PatrilangErrorListener(file);
+
+      parser.removeErrorListeners();
+      parser.addErrorListener(errorListener);
+
+      lexer.removeErrorListeners();
+      lexer.addErrorListener(errorListener);
+      return parser.document();
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+  }
+}

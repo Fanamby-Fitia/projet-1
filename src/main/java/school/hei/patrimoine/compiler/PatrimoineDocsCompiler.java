@@ -1,0 +1,67 @@
+package school.hei.patrimoine.compiler;
+
+import static javax.tools.ToolProvider.getSystemJavaCompiler;
+import static school.hei.patrimoine.compiler.CompilerUtilities.COMPILE_DIR_NAME;
+import static school.hei.patrimoine.compiler.JavaFileNameExtractor.JAVA_FILE_EXTENSION;
+
+import java.io.File;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.function.BiFunction;
+import java.util.function.Supplier;
+import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
+import school.hei.patrimoine.modele.Patrimoine;
+
+@Slf4j
+public class PatrimoineDocsCompiler implements BiFunction<String, String, Patrimoine> {
+
+  static {
+    var compileDirectory = new File(COMPILE_DIR_NAME);
+    if (!compileDirectory.exists() && !compileDirectory.mkdirs()) {
+      log.warn("Failed to create directory {}", compileDirectory.getAbsolutePath());
+    }
+  }
+
+  @Override
+  @SneakyThrows
+  @SuppressWarnings("unchecked")
+  public Patrimoine apply(String filename, String javaSource) {
+    var ioDirPath = Path.of(COMPILE_DIR_NAME);
+    var sourcePath = Path.of(ioDirPath + "/" + filename);
+    Files.write(sourcePath, javaSource.getBytes());
+
+    compile(ioDirPath, sourcePath);
+    var classname = filename.replace(JAVA_FILE_EXTENSION, "");
+    var dynamicClass = loadClass(classname, ioDirPath);
+    var patrimoineSupplier =
+        (Supplier<Patrimoine>) dynamicClass.getDeclaredConstructor().newInstance();
+    return patrimoineSupplier.get();
+  }
+
+  @SneakyThrows
+  private Class<?> loadClass(String className, Path ioDirPath) {
+    var classLoader = URLClassLoader.newInstance(new URL[] {ioDirPath.toUri().toURL()});
+    boolean INITIALIZE_CLASS = true;
+
+    return Class.forName(className, INITIALIZE_CLASS, classLoader);
+  }
+
+  private void compile(Path ioDirPath, Path sourcePath) {
+    var compiler = getSystemJavaCompiler();
+    int result =
+        compiler.run(
+            null,
+            null,
+            null,
+            "-d",
+            ioDirPath.toFile().getAbsolutePath(),
+            sourcePath.toFile().getAbsolutePath());
+
+    if (result != 0) {
+      throw new RuntimeException("Compilation failed. Error code=" + result);
+    }
+  }
+}

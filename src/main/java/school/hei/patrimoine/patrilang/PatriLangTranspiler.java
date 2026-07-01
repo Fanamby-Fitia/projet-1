@@ -1,0 +1,71 @@
+package school.hei.patrimoine.patrilang;
+
+import static school.hei.patrimoine.patrilang.PatriLangParser.parseCas;
+import static school.hei.patrimoine.patrilang.PatriLangParser.parsePieceJustificative;
+import static school.hei.patrimoine.patrilang.PatriLangParser.parseToutCas;
+
+import java.nio.file.Paths;
+import java.util.List;
+import java.util.function.Function;
+import school.hei.patrimoine.cas.Cas;
+import school.hei.patrimoine.cas.CasSet;
+import school.hei.patrimoine.modele.possession.pj.PieceJustificative;
+import school.hei.patrimoine.patrilang.files.PatriLangFile;
+import school.hei.patrimoine.patrilang.visitors.*;
+import school.hei.patrimoine.patrilang.visitors.factory.SectionVisitorFactory;
+import school.hei.patrimoine.patrilang.visitors.variable.VariableVisitor;
+
+public class PatriLangTranspiler implements Function<String, CasSet> {
+  public static final String PJ_FILE_EXTENSION = ".pj.md";
+  public static final String CAS_FILE_EXTENSION = ".cas.md";
+  public static final String TOUT_CAS_FILE_EXTENSION = ".tout.md";
+
+  @Override
+  public CasSet apply(String casSetFilePath) {
+    return transpileToutCas(casSetFilePath);
+  }
+
+  public static Cas transpileCas(String casName, SectionVisitor sectionVisitor) {
+    var casPath =
+        Paths.get(sectionVisitor.getCasSetFolderPath())
+            .resolve(casName + CAS_FILE_EXTENSION)
+            .toAbsolutePath()
+            .toString();
+    var tree = parseCas(new PatriLangFile(casPath));
+    var patrilangVisitor =
+        new PatriLangVisitor(null, new PatriLangCasVisitor(sectionVisitor), null);
+    return patrilangVisitor.visitCas(tree);
+  }
+
+  public static CasSet transpileToutCas(PatriLangFile casSetFile) {
+    var tree = parseToutCas(casSetFile);
+    var casSetFolderPath = casSetFile.toPath().getParent().toAbsolutePath();
+    var sectionVisitor = SectionVisitorFactory.make(casSetFolderPath.toString());
+    var patrilangVisitor =
+        new PatriLangVisitor(new PatriLangToutCasVisitor(sectionVisitor), null, null);
+
+    return patrilangVisitor.visitToutCas(tree);
+  }
+
+  public static List<PieceJustificative> transpilePieceJustificative(PatriLangFile file) {
+    var tree = parsePieceJustificative(file);
+    var variableVisitor = new VariableVisitor();
+    var patrilangVisitor =
+        PatriLangVisitor.builder()
+            .piecesJustificativeVisitor(
+                new PatriLangPieceJustificativeVisitor(
+                    new IdVisitor(variableVisitor), variableVisitor.getVariableDateVisitor()))
+            .build();
+    return patrilangVisitor.visitPiecesJustificatives(tree);
+  }
+
+  @Deprecated
+  public static CasSet transpileToutCas(String casSetFile) {
+    return transpileToutCas(new PatriLangFile(casSetFile));
+  }
+
+  @Deprecated
+  public static List<PieceJustificative> transpilePieceJustificative(String pjFile) {
+    return transpilePieceJustificative(new PatriLangFile(pjFile));
+  }
+}
